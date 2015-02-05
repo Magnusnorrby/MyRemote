@@ -33,10 +33,16 @@ namespace Microsoft.Samples.Kinect.BodyBasics
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         /// <summary>
-        /// Allows the system to simulate mouse and keyboard events
+        /// Allows the system to simulate mouse events
         /// </summary>
         [DllImport("user32.dll")]
-        public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
+        static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
+
+        /// <summary>
+        /// Allows the system to simulate keyboard events
+        /// </summary>
+        [DllImport("user32.dll")]
+        static extern void keybd_event(byte bVk, byte bScan, int dwFlaags, int dwExtraInfo);
 
         /// <summary>
         /// Mouse variables
@@ -47,6 +53,15 @@ namespace Microsoft.Samples.Kinect.BodyBasics
         private const int MOUSEEVENT_RIGHTUP = 0x10;
         private const int MOUSEEVENT_MOUSEWHEEL = 0x0800;
 
+        /// <summary>
+        /// Keyboard variables
+        /// </summary>
+
+        private const int KEYEVENT_DOWN = 0x0001; // key up
+        private const int KEYEVENT_UP = 0x0002;  // key down
+        private const int VK_CTR = 0xA2; // CTR-key
+
+       
         /// <summary>
         /// TackingId for the person driving the app
         /// </summary>
@@ -183,6 +198,11 @@ namespace Microsoft.Samples.Kinect.BodyBasics
         /// </summary>
         private HandState oldLeftHandState;
 
+        /// <summary>
+        /// Lock for speech events
+        /// </summary>
+        private readonly object speechLock = new object();
+
 
 
         /// <summary>
@@ -293,70 +313,90 @@ namespace Microsoft.Samples.Kinect.BodyBasics
         /// <param name="e">event arguments.</param>
         private void SpeechRecognized(object sender, SpeechRecognizedEventArgs e)
         {
-            // Speech utterance confidence below which we treat speech as if it hadn't been heard
-            const double ConfidenceThreshold = 0.3;
-            if (e.Result.Confidence >= ConfidenceThreshold & e.Result.Text!=null)
+            lock (speechLock)
             {
-                switch (e.Result.Text.ToLower()) // the word can be both upper and lower case depending on voice level
+                // Speech utterance confidence below which we treat speech as if it hadn't been heard
+                const double ConfidenceThreshold = 0.3;
+                if (e.Result.Confidence >= ConfidenceThreshold & e.Result.Text != null)
                 {
-                    case "activate":
-                        if (!activate)
-                        {
-                            activate = true;
-                            theVoice.Speak("Activating remote controll");
-                        }
-                        else
-                        {
-                            theVoice.Speak("Already activated");
-                        }
-                   
-                        break;
+                    switch (e.Result.Text)
+                    {
+                        case "activate":
+                            if (!activate)
+                            {
+                                activate = true;
+                                theVoice.Speak("Activating remote controll");
+                            }
+                            else
+                            {
+                                theVoice.Speak("Already activated");
+                            }
 
-                    case "glmole": // GLMol
-                        theVoice.Speak("Launching G L Mol");
-                        System.Diagnostics.Process.Start("chrome", "C:/Users/kptg125/Desktop/GLMol/viewer.html");
-                        break;
+                            break;
 
-                    case "python mole": //pyMol
-                        theVoice.Speak("Launching Pymol");
-                        System.Diagnostics.Process.Start("C:/Users/kptg125/Desktop/pymol/PyMOL/PymolWin.exe", "C:/Users/kptg125/Desktop/pymol/PyMOL/2DHB.pdb");
-                        break;
+                        case "open graphics": // GLMol
+                            theVoice.Speak("Launching G L Mol");
+                            System.Diagnostics.Process.Start("chrome", "C:/Users/kptg125/Desktop/GLMol/viewer.html");
+                            break;
 
-                    case "calculated lab": //clab
-                        theVoice.Speak("Launching C Lab");
-                        System.Diagnostics.Process.Start("chrome", "http://clab.rd.astrazeneca.net:8000/dashboard#/");
-                        break;
+                        case "python mole": //pyMol
+                            theVoice.Speak("Launching Pymol");
+                            System.Diagnostics.Process.Start("C:/Users/kptg125/Desktop/pymol/PyMOL/PymolWin.exe", "C:/Users/kptg125/Desktop/pymol/PyMOL/2DHB.pdb");
+                            break;
 
-                    case "break":
-                        if (activate)
-                        {
-                            activate = false;
-                            theVoice.Speak("Deactivating remote controll");
-                        }
-                        else
-                        {
-                            theVoice.Speak("Already deactivated");
-                        }
-                      
-                        break;
+                        case "calculated lab": //clab
+                            theVoice.Speak("Launching C Lab");
+                            System.Diagnostics.Process.Start("chrome", "http://clab.rd.astrazeneca.net:8000/dashboard#/");
+                            break;
 
-                    case "shut down":
-                        theVoice.Speak("Shutting down, Good bye!");
-                        this.Close();
-                        
-                        break;
+                        case "break":
+                            if (activate)
+                            {
+                                activate = false;
+                                theVoice.Speak("Deactivating remote controll");
+                            }
+                            else
+                            {
+                                theVoice.Speak("Already deactivated");
+                            }
 
-                    case "are you alive":
-                        theVoice.Speak("Hello, I am still listening!");
-                        break;
+                            break;
 
-                    case "help me":
-                        theVoice.Speak("Commands written to console!");
-                        Console.Out.Write("\n 'Activate' - starts remote control \n 'Stop' - stops remote control \n 'shut down' - exits the program \n 'GLMol' - launches GLMOL \n 'PyMol' - launches PyMol \n 'Calculated lab' - launches cLab \n");
+                        case "shut down":
+                            theVoice.Speak("Shutting down, Good bye");
+                            this.Close();
 
-                        break;
+                            break;
+
+                        case "are you alive":
+                            theVoice.Speak("Hello, I am still listening");
+                            break;
+
+                        case "help me":
+                            theVoice.Speak("Commands written to console");
+                            printHelp();
+
+                            break;
+
+                        case "toggle control":
+                            if (Control.ModifierKeys == Keys.Control)
+                            {
+                                theVoice.Speak("Control key released");
+                                keybd_event(VK_CTR, 0, KEYEVENT_UP, 0);
+                            }
+                            else
+                            {
+                                theVoice.Speak("Control key pressed");
+                                keybd_event(VK_CTR, 0, KEYEVENT_DOWN, 0);
+                            }
+                           
+                            break;
+
+
+                    }
                 }
             }
+
         }
 
         /// <summary>
@@ -411,6 +451,14 @@ namespace Microsoft.Samples.Kinect.BodyBasics
         }
 
         /// <summary>
+        /// Prints the possible voice commands
+        /// </summary>
+        public void printHelp()
+        {
+            Console.Out.Write("\n 'Activate' - starts remote control \n 'Stop' - stops remote control \n 'shut down' - exits the program \n 'open graphics' - launches GLMol \n 'PyMol' - launches PyMol \n 'Calculated lab' - launches cLab \n");
+        }
+
+        /// <summary>
         /// Execute start up tasks
         /// </summary>
         /// <param name="sender">object sending the event</param>
@@ -425,14 +473,16 @@ namespace Microsoft.Samples.Kinect.BodyBasics
 
 
                 var commands = new Choices();
-                commands.Add("activate","ACTIVATE");
-                commands.Add("break", "BREAK");
-                commands.Add("glmole","GLMOLE");  // GLMol
-                commands.Add("calculated lab","CALCULATED LAB"); //clab
-                commands.Add("python mole", "PYTHON MOLE");  //pymol
-                commands.Add("shut down", "SHUT DOWN");
-                commands.Add("are you alive", "ARE YOU ALIVE");
-                commands.Add("help me", "HELP ME");
+                commands.Add("activate");
+                commands.Add("break");
+                commands.Add("open graphics");  // GLMol
+                commands.Add("calculated lab"); //clab
+                commands.Add("python mole");  //pymol
+                commands.Add("shut down");
+                commands.Add("are you alive");
+                commands.Add("help me");
+                commands.Add("toggle control");
+ 
 
                 var gb = new GrammarBuilder { Culture = ri.Culture };
                 gb.Append(commands);
@@ -440,8 +490,12 @@ namespace Microsoft.Samples.Kinect.BodyBasics
                 var g = new Grammar(gb);
                 this.speechEngine.LoadGrammar(g);
 
-                this.speechEngine.SpeechRecognized += this.SpeechRecognized;
-                this.speechEngine.SpeechRecognitionRejected += this.SpeechRejected;
+                lock (speechLock)
+                {
+                    this.speechEngine.SpeechRecognized += this.SpeechRecognized;
+                    this.speechEngine.SpeechRecognitionRejected += this.SpeechRejected;
+                }
+              
 
                 // let the convertStream know speech is going active
                 this.convertStream.SpeechActive = true;
@@ -458,6 +512,7 @@ namespace Microsoft.Samples.Kinect.BodyBasics
             theVoice.SelectVoice("Microsoft Zira Desktop"); // Sets the speaking voice
 
             theVoice.Speak("Ready");
+            printHelp();
 
             if (this.bodyFrameReader != null)
             {
@@ -509,6 +564,7 @@ namespace Microsoft.Samples.Kinect.BodyBasics
             }
         }
 
+ 
         /// <summary>
         /// Handles the body frame data arriving from the sensor
         /// </summary>
