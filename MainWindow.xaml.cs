@@ -378,19 +378,6 @@ namespace Microsoft.Samples.Kinect.BodyBasics
 
                             break;
 
-                        case "toggle control":
-                            if (Control.ModifierKeys == Keys.Control)
-                            {
-                                theVoice.Speak("Control key released");
-                                keybd_event(VK_CTR, 0, KEYEVENT_UP, 0);
-                            }
-                            else
-                            {
-                                theVoice.Speak("Control key pressed");
-                                keybd_event(VK_CTR, 0, KEYEVENT_DOWN, 0);
-                            }
-                           
-                            break;
 
 
                     }
@@ -481,7 +468,7 @@ namespace Microsoft.Samples.Kinect.BodyBasics
                 commands.Add("shut down");
                 commands.Add("are you alive");
                 commands.Add("help me");
-                commands.Add("toggle control");
+          
  
 
                 var gb = new GrammarBuilder { Culture = ri.Culture };
